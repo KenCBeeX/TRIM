@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
+<title>TRIM — Buoyancy Foam Density Translator</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A1620">
+<meta name="description" content="Translate required volumes between buoyancy foam densities in seawater or freshwater, and match them to physical block sizes.">
+
+<!-- Android / Chrome -->
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+
+<!-- iOS Safari (manifest support is partial, so these are set explicitly) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TRIM">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<style>
+  :root{
+    --bg:#0A1620;
+    --bg-panel:#0F1E2B;
+    --bg-raised:#142838;
+    --bg-input:#0B1720;
+    --line:#20374A;
+    --line-bright:#325067;
+    --text:#E7EDF3;
+    --text-dim:#8FA7B9;
+    --text-faint:#57748A;
+    --amber:#E8A33D;
+    --amber-dim:#8A6526;
+    --cyan:#4FB3D9;
+    --red:#E0654A;
+    --green:#5FBF8F;
+    --font-mono: ui-monospace, 'Cascadia Code', 'Roboto Mono', 'SF Mono', Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --radius: 3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at 20% -10%, #10222f 0%, transparent 60%),
+      linear-gradient(180deg, var(--bg) 0%, #081119 100%);
+    color:var(--text);
+    font-family:var(--font-sans);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{max-width:1100px;margin:0 auto;padding:18px 16px 60px;}
+
+  /* ---------- header / console strip ---------- */
+  .console-header{
+    display:flex;align-items:center;gap:16px;
+    padding:14px 16px;
+    background:linear-gradient(180deg, var(--bg-raised), var(--bg-panel));
+    border:1px solid var(--line);
+    border-radius:6px;
+    margin-bottom:16px;
+  }
+  .gauge-wrap{flex:0 0 auto;width:52px;height:52px;}
+  .gauge-needle{transform-origin:26px 26px;animation:sweep 7s ease-in-out infinite;}
+  @keyframes sweep{
+    0%,100%{transform:rotate(-14deg);}
+    50%{transform:rotate(14deg);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .gauge-needle{animation:none;}
+  }
+  .brand{flex:1 1 auto;min-width:0;}
+  .brand h1{
+    margin:0;font-family:var(--font-mono);font-size:20px;letter-spacing:0.14em;
+    color:var(--text);font-weight:600;
+  }
+  .brand p{margin:2px 0 0;font-size:12px;color:var(--text-dim);letter-spacing:0.02em;}
+
+  .tabs{display:flex;gap:0;border:1px solid var(--line);border-radius:5px;overflow:hidden;flex:0 0 auto;}
+  .tab-btn{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.08em;
+    padding:9px 14px;background:var(--bg-panel);color:var(--text-dim);
+    border:none;cursor:pointer;text-transform:uppercase;
+    border-left:1px solid var(--line);
+  }
+  .tab-btn:first-child{border-left:none;}
+  .tab-btn.active{background:var(--amber-dim);color:#FBE7C6;}
+  .tab-btn:hover:not(.active){color:var(--text);}
+
+  @media (max-width:560px){
+    .console-header{flex-wrap:wrap;}
+    .tabs{width:100%;order:3;}
+    .tab-btn{flex:1 1 auto;text-align:center;}
+  }
+
+  /* ---------- panels & fields ---------- */
+  .panel{
+    background:var(--bg-panel);border:1px solid var(--line);border-radius:6px;
+    padding:16px;margin-bottom:16px;
+  }
+  .panel-title{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.12em;
+    color:var(--amber);text-transform:uppercase;margin:0 0 14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel-title::after{content:"";flex:1;height:1px;background:var(--line);}
+  .panel-sub{font-size:11px;color:var(--text-faint);margin:-8px 0 14px;}
+
+  .field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+  .field label{
+    display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;
+    letter-spacing:0.03em;
+  }
+  select,input[type=text],input[type=number]{
+    width:100%;background:var(--bg-input);border:1px solid var(--line);
+    color:var(--text);font-family:var(--font-mono);font-size:14px;
+    padding:9px 10px;border-radius:var(--radius);
+  }
+  select:focus,input:focus{outline:none;border-color:var(--cyan);}
+  .hint{font-size:11px;color:var(--text-faint);margin-top:4px;}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    font-family:var(--font-mono);font-size:12px;letter-spacing:0.04em;
+    padding:9px 14px;border-radius:var(--radius);border:1px solid var(--line-bright);
+    background:var(--bg-raised);color:var(--text);cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn:hover{border-color:var(--cyan);color:var(--cyan);}
+  .btn-primary{background:var(--amber-dim);border-color:var(--amber-dim);color:#FBE7C6;}
+  .btn-primary:hover{border-color:var(--amber);color:#fff2da;}
+  .btn-danger{color:var(--red);border-color:#5a2c22;}
+  .btn-danger:hover{border-color:var(--red);}
+  .btn-sm{padding:5px 9px;font-size:11px;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+
+  .mode-toggle{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;width:fit-content;}
+  .mode-btn{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.05em;padding:8px 13px;
+    background:var(--bg-input);color:var(--text-dim);border:none;cursor:pointer;
+    border-left:1px solid var(--line);
+  }
+  .mode-btn:first-child{border-left:none;}
+  .mode-btn.active{background:var(--cyan);color:#062330;}
+
+  /* ---------- readout (net buoyancy) ---------- */
+  .readout{
+    display:flex;gap:22px;flex-wrap:wrap;margin-top:14px;padding-top:14px;
+    border-top:1px dashed var(--line);
+  }
+  .readout-item .val{font-family:var(--font-mono);font-size:22px;color:var(--cyan);}
+  .readout-item .lbl{font-size:11px;color:var(--text-dim);margin-top:2px;}
+
+  /* ---------- block picker (calculator input) ---------- */
+  .block-picker{border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+  .block-group-label{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--text-faint);padding:8px 12px;background:var(--bg-raised);border-bottom:1px solid var(--line);
+  }
+  .block-row{
+    display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);
+  }
+  .block-row:last-child{border-bottom:none;}
+  .block-row .bname{flex:1;font-size:13px;}
+  .block-row .bvol{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);width:120px;text-align:right;}
+  .block-row input[type=number]{width:70px;text-align:center;padding:6px 4px;}
+  .block-total{
+    padding:10px 12px;font-family:var(--font-mono);font-size:13px;color:var(--cyan);
+    background:var(--bg-raised);
+  }
+
+  /* ---------- results table ---------- */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px;}
+  thead th{
+    text-align:left;font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--text-dim);padding:10px 12px;
+    background:var(--bg-raised);border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  tbody td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(255,255,255,0.02);}
+  .mono{font-family:var(--font-mono);}
+  .foam-name{color:var(--text);font-weight:600;white-space:nowrap;}
+
+  .density-bar-wrap{width:110px;}
+  .density-bar-track{position:relative;height:6px;background:var(--bg-input);border-radius:3px;overflow:visible;}
+  .density-bar-fill{position:absolute;left:0;top:0;height:100%;border-radius:3px;background:var(--cyan);}
+  .density-bar-fill.danger{background:var(--red);}
+  .waterline{position:absolute;top:-3px;width:1px;height:12px;background:var(--amber);}
+
+  .badge{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.05em;
+    padding:3px 7px;border-radius:2px;text-transform:uppercase;white-space:nowrap;
+    border:1px solid transparent;
+  }
+  .badge-ok{color:var(--green);border-color:#284a3a;background:rgba(95,191,143,0.08);}
+  .badge-warn{color:var(--amber);border-color:#4a3a1c;background:rgba(232,163,61,0.08);}
+  .badge-danger{color:var(--red);border-color:#4a241c;background:rgba(224,101,74,0.08);}
+
+  .combo-list{list-style:none;margin:0;padding:0;min-width:170px;}
+  .combo-list li{white-space:nowrap;}
+  .combo-total{margin-top:4px;color:var(--text-dim);}
+  .combo-total .diff-over{color:var(--amber);}
+  .combo-total .diff-under{color:var(--cyan);}
+  .combo-none{color:var(--text-faint);}
+
+  .empty-note{padding:24px;text-align:center;color:var(--text-faint);font-size:13px;}
+
+  /* ---------- foam filter + column selector ---------- */
+  .results-controls{
+    display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;margin-bottom:12px;
+  }
+  .filter-section{flex:1 1 0;min-width:0;}
+  .filter-label{font-size:10px;font-family:var(--font-mono);letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--text-faint);margin-bottom:6px;}
+  .chip-row{display:flex;flex-wrap:wrap;gap:5px;}
+  .fchip{
+    font-family:var(--font-mono);font-size:11px;padding:4px 10px;border-radius:2px;
+    border:1px solid var(--line);background:var(--bg-input);color:var(--text-faint);
+    cursor:pointer;white-space:nowrap;transition:border-color 0.1s,color 0.1s;
+  }
+  .fchip.on{border-color:var(--cyan);color:var(--cyan);background:rgba(79,179,217,0.07);}
+  .fchip.all-chip{border-style:dashed;}
+  .col-toggle-btn{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.04em;
+    padding:5px 11px;border-radius:2px;border:1px solid var(--line-bright);
+    background:var(--bg-raised);color:var(--text-dim);cursor:pointer;white-space:nowrap;
+    align-self:flex-end;flex-shrink:0;
+  }
+  .col-toggle-btn:hover,.col-toggle-btn.open{border-color:var(--amber);color:var(--amber);}
+  .col-panel{
+    display:flex;flex-wrap:wrap;gap:5px;
+    padding:10px 12px;background:var(--bg-raised);border:1px solid var(--line);
+    border-radius:4px;margin-bottom:12px;
+  }
+  .cchip{
+    font-family:var(--font-mono);font-size:11px;padding:4px 9px;border-radius:2px;
+    border:1px solid var(--line);background:var(--bg-input);color:var(--text-faint);cursor:pointer;
+  }
+  .cchip.on{border-color:var(--green);color:var(--green);background:rgba(95,191,143,0.07);}
+
+  /* ---------- library tables ---------- */
+  .lib-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px;}
+  .lib-table{width:100%;border-collapse:collapse;min-width:600px;}
+  .lib-table th{
+    text-align:left;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;
+    text-transform:uppercase;color:var(--text-dim);padding:9px 10px;
+    background:var(--bg-raised);border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  .lib-table td{padding:6px 8px;border-bottom:1px solid var(--line);}
+  .lib-table input{padding:7px 8px;font-size:13px;min-width:90px;}
+  .lib-table td.vol-cell{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);white-space:nowrap;}
+  .col-x{color:var(--text-faint);cursor:pointer;margin-left:6px;font-size:11px;}
+  .col-x:hover{color:var(--red);}
+  .row-del{color:var(--text-faint);cursor:pointer;background:none;border:none;font-size:16px;line-height:1;padding:4px 6px;}
+  .row-del:hover{color:var(--red);}
+
+  .prop-form{
+    display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;
+    margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);
+  }
+  .prop-form .field{flex:1 1 140px;}
+  .dim-input{width:64px !important;min-width:64px !important;text-align:center;}
+
+  .footer-note{
+    margin-top:24px;font-size:11px;color:var(--text-faint);line-height:1.6;
+    border-top:1px solid var(--line);padding-top:14px;
+  }
+  .footer-note code{font-family:var(--font-mono);color:var(--text-dim);}
+  input[type=file]{display:none;}
+
+  ::selection{background:var(--amber-dim);color:#fff;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "trim-buoyancy-v1";
+  var DEFAULTS_URL = "defaults.json";
+
+  // Used only if defaults.json can't be fetched (e.g. first run offline,
+  // before the service worker has cached it, or the file is missing).
+  // Keeps the app usable rather than showing an empty library.
+  var FALLBACK_DEFAULTS = {
+  foams: [
+    {
+      id: "f1",
+      name: "R-3312",
+      density: 192,
+      depthRating: 91,
+      custom: {
+        pmrrumz0xpp0vo: "BlueRobotics"
+      },
+      sizes: []
+    },
+    {
+      id: "f2",
+      name: "R-3318",
+      density: 288,
+      depthRating: 300,
+      custom: {
+        pmrrumz0xpp0vo: "BlueRobotics"
+      },
+      sizes: []
+    },
+    {
+      id: "f3",
+      name: "H130",
+      density: 130,
+      depthRating: 70,
+      custom: {
+        pmrrumz0xpp0vo: "Diab"
+      },
+      sizes: []
+    },
+    {
+      id: "f4",
+      name: "H160",
+      density: 160,
+      depthRating: 100,
+      custom: {
+        pmrrumz0xpp0vo: "Diab"
+      },
+      sizes: []
+    },
+    {
+      id: "f5",
+      name: "HCP30",
+      density: 200,
+      depthRating: 190,
+      custom: {
+        pmrrumz0xpp0vo: "Diab"
+      },
+      sizes: []
+    },
+    {
+      id: "f6",
+      name: "HCP50",
+      density: 250,
+      depthRating: 300,
+      custom: {
+        pmrrumz0xpp0vo: "Diab"
+      },
+      sizes: []
+    },
+    {
+      id: "f7",
+      name: "EVA Foam",
+      density: 100,
+      depthRating: 40,
+      custom: {
+        pmrrumz0xpp0vo: ""
+      },
+      sizes: []
+    }
+  ],
+  properties: [
+    {
+      id: "pmrrumz0xpp0vo",
+      name: "Supplier",
+      type: "text"
+    }
+  ],
+  globalSizes: [
+    {
+      id: "g1",
+      name: "Skid block",
+      l: 203.2,
+      w: 83.725,
+      h: 25.4
+    },
+    {
+      id: "g2",
+      name: "Square block",
+      l: 101.6,
+      w: 101.6,
+      h: 25.4
+    },
+    {
+      id: "g3",
+      name: "Small block",
+      l: 101.6,
+      w: 50.8,
+      h: 25.4
+    }
+  ]
+};
+
+  var DEFAULTS = null;       // populated by loadDefaults() before the app renders
+  var defaultsLoadFailed = false;
+
+  function loadDefaults(){
+    return fetch(DEFAULTS_URL, {cache:"no-cache"}).then(function(res){
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).then(function(data){
+      DEFAULTS = {
+        foams: Array.isArray(data.foams) ? data.foams : FALLBACK_DEFAULTS.foams,
+        globalSizes: Array.isArray(data.globalSizes) ? data.globalSizes : FALLBACK_DEFAULTS.globalSizes,
+        properties: Array.isArray(data.properties) ? data.properties : FALLBACK_DEFAULTS.properties
+      };
+    }).catch(function(err){
+      console.warn("Could not load " + DEFAULTS_URL + ", using built-in fallback defaults:", err);
+      DEFAULTS = FALLBACK_DEFAULTS;
+      defaultsLoadFailed = true;
+    });
+  }
+
+  function clone(v){ return JSON.parse(JSON.stringify(v)); }
+  function defaultFoams(){ return clone(DEFAULTS.foams); }
+  function defaultGlobalSizes(){ return clone(DEFAULTS.globalSizes); }
+  function defaultProperties(){ return clone(DEFAULTS.properties); }
+
+  function uid(prefix){
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  }
+
+  var CURRENT_SCHEMA_VERSION = 2;
+
+  function loadState(){
+    var s = { foams: defaultFoams(), properties: defaultProperties(), globalSizes: defaultGlobalSizes(), calc:{}, schemaVersion: CURRENT_SCHEMA_VERSION };
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        var parsed = JSON.parse(raw);
+        if(parsed && Array.isArray(parsed.foams)){
+          s.foams = parsed.foams;
+          s.properties = parsed.properties || [];
+          s.globalSizes = parsed.globalSizes || [];
+          s.calc = parsed.calc || {};
+          // Real saved data predating the schemaVersion field is legacy cm data (v1).
+          // Freshly-built state above already carries CURRENT_SCHEMA_VERSION and must
+          // not be reinterpreted as legacy just because this branch didn't run.
+          s.schemaVersion = parsed.schemaVersion || 1;
+        }
+      }
+    }catch(e){ console.warn("Could not read saved library:", e); }
+
+    // migrations / defaults for older or partial saves
+    s.foams.forEach(function(f){
+      if(!f.sizes) f.sizes = [];
+      if(!f.custom) f.custom = {};
+    });
+    // block sizes used to be entered in cm; convert genuine legacy saves to mm once.
+    // (Never applies to fresh state from defaults.json — that's already mm.)
+    if(s.schemaVersion < 2){
+      var scaleDims = function(sz){ sz.l = (parseFloat(sz.l)||0)*10; sz.w = (parseFloat(sz.w)||0)*10; sz.h = (parseFloat(sz.h)||0)*10; };
+      s.globalSizes.forEach(scaleDims);
+      s.foams.forEach(function(f){ (f.sizes||[]).forEach(scaleDims); });
+      s.schemaVersion = 2;
+    }
+    if(!s.calc.hiddenFoamIds) s.calc.hiddenFoamIds = [];
+    if(!s.calc.hiddenCols)   s.calc.hiddenCols   = [];
+    if(s.calc.customVolume === undefined){
+      // migrate old litre-based "volume" field if present
+      s.calc.customVolume = (s.calc.volume !== undefined) ? (parseFloat(s.calc.volume)||0) * 1000 : 100000;
+    }
+    if(s.calc.inputMode === undefined) s.calc.inputMode = "custom";
+    if(s.calc.blockQuantities === undefined) s.calc.blockQuantities = {};
+    if(s.calc.waterType === undefined) s.calc.waterType = "seawater";
+    if(s.calc.customWaterDensity === undefined) s.calc.customWaterDensity = 1010;
+    if(s.calc.useDepth === undefined) s.calc.useDepth = "";
+    if(s.calc.selectedFoamId === undefined || !s.foams.some(function(f){return f.id===s.calc.selectedFoamId;})){
+      s.calc.selectedFoamId = s.foams.length ? s.foams[0].id : null;
+    }
+    return s;
+  }
+
+  var state; // populated in init(), after defaults.json has loaded
+
+  function saveState(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        foams: state.foams,
+        properties: state.properties,
+        globalSizes: state.globalSizes,
+        calc: state.calc,
+        schemaVersion: state.schemaVersion
+      }));
+    }catch(e){ console.warn("Could not save library:", e); }
+  }
+
+  function waterDensity(){
+    if(state.calc.waterType === "seawater") return 1025;
+    if(state.calc.waterType === "freshwater") return 1000;
+    var v = parseFloat(state.calc.customWaterDensity);
+    return isNaN(v) ? 1000 : v;
+  }
+
+  function fmt(n, d){
+    if(n === null || n === undefined || isNaN(n)) return "—";
+    return Number(n).toLocaleString(undefined,{minimumFractionDigits:d||0, maximumFractionDigits:d||0});
+  }
+
+  function getFoam(id){
+    for(var i=0;i<state.foams.length;i++) if(state.foams[i].id===id) return state.foams[i];
+    return null;
+  }
+
+  function sizeVolume(s){ return ((parseFloat(s.l)||0) * (parseFloat(s.w)||0) * (parseFloat(s.h)||0)) / 1000; } // mm³ -> cm³
+
+  function effectiveSizes(foam){
+    var list = state.globalSizes.map(function(s){
+      return {id:s.id, name:s.name, l:s.l, w:s.w, h:s.h, volume:sizeVolume(s), scope:"global"};
+    });
+    if(foam && foam.sizes){
+      foam.sizes.forEach(function(s){
+        list.push({id:s.id, name:s.name, l:s.l, w:s.w, h:s.h, volume:sizeVolume(s), scope:"foam"});
+      });
+    }
+    return list;
+  }
+
+  /* ============================================================
+     BLOCK COMBINATION SOLVER — integer DP (unbounded knapsack)
+
+     Primary goal : minimise excess volume (tightest fit from above,
+                    so the result is always positively buoyant).
+     Secondary goal: minimise block count (tiebreaker only).
+
+     Works by quantising volumes to 1 cm³ and GCD-scaling the DP
+     table, which keeps it tiny for standard rectangular-block sets
+     (e.g. GCD 12 000 cm³ → table of ~50 entries regardless of
+     target size). For pathological cases where the GCD is very
+     small (e.g. a STEP-imported block with an irregular volume),
+     the table can grow to a few hundred thousand entries, still
+     well within browser memory and finishing in <10 ms.
+     Falls back to an enhanced greedy when the table would exceed
+     8 M entries.
+  ============================================================ */
+  function _gcd(a,b){ while(b){ var t=b; b=a%b; a=t; } return a; }
+
+  function findBestCombination(sizes, targetCm3){
+    if(!sizes || sizes.length===0) return null;
+    var usable = sizes.filter(function(s){ return s.volume > 0; });
+    if(usable.length===0) return null;
+    if(targetCm3 <= 0) return {combo:[], total:0, diff:0, insufficient:false};
+
+    // Quantise volumes to nearest 1 cm³.
+    var qTarget = Math.ceil(targetCm3);
+    var qVols   = usable.map(function(s){ return Math.max(1, Math.round(s.volume)); });
+
+    // GCD-scale to shrink the DP table.
+    var g     = qVols.reduce(function(acc,v){ return _gcd(acc,v); }, qVols[0]);
+    var sVols = qVols.map(function(v){ return (v/g)|0; });
+    var sMax  = Math.max.apply(null, sVols);
+    var sTarget   = Math.ceil(qTarget / g);
+    var tableSize = sTarget + sMax;
+
+    if(tableSize > 8000000) return _comboGreedy(usable, targetCm3);
+
+    var INF  = 0x7fffffff;
+    var dp   = new Int32Array(tableSize + 1);   // min blocks to reach j scaled units
+    var prev = new Int16Array(tableSize + 1);   // which block type was last added (signed → -1 ok)
+    for(var j=1; j<=tableSize; j++) dp[j]   = INF;
+    for(var j=0; j<=tableSize; j++) prev[j] = -1;
+
+    for(var j=1; j<=tableSize; j++){
+      for(var i=0; i<sVols.length; i++){
+        var sv = sVols[i];
+        if(j >= sv && dp[j-sv] !== INF && dp[j-sv]+1 < dp[j]){
+          dp[j]   = dp[j-sv] + 1;
+          prev[j] = i;
+        }
+      }
+    }
+
+    // Minimum j >= sTarget that is reachable → minimum excess.
+    var bestJ = -1;
+    for(var j=sTarget; j<=tableSize; j++){
+      if(dp[j] < INF){ bestJ = j; break; }
+    }
+    if(bestJ < 0) return {combo:null, total:0, diff:0, insufficient:true};
+
+    // Reconstruct via back-pointers.
+    var counts = new Array(usable.length).fill(0);
+    var cur = bestJ;
+    while(cur > 0 && prev[cur] >= 0){
+      var idx = prev[cur]; counts[idx]++; cur -= sVols[idx];
+    }
+
+    var totalCm3 = bestJ * g;
+    var combo = [];
+    for(var i=0; i<usable.length; i++){
+      if(counts[i] > 0) combo.push({name:usable[i].name, volume:usable[i].volume, qty:counts[i]});
+    }
+    return {combo:combo, total:totalCm3, diff:totalCm3 - targetCm3, insufficient:false};
+  }
+
+  // Greedy fallback for extremely large targets with near-unit GCD.
+  function _comboGreedy(usable, targetCm3){
+    var sorted = usable.slice().sort(function(a,b){ return b.volume - a.volume; });
+    var bestExcess = Infinity, bestCounts = null;
+    function fill(idx, rem, cnts){
+      if(rem <= 0){
+        var ex = -rem;
+        if(ex < bestExcess){ bestExcess = ex; bestCounts = cnts.slice(); }
+        return;
+      }
+      if(idx >= sorted.length) return;
+      var vol = sorted[idx].volume;
+      var base = Math.floor(rem / vol);
+      for(var q = base+1; q >= base; q--){ cnts[idx] = q; fill(idx+1, rem - q*vol, cnts); }
+      cnts[idx] = 0;
+    }
+    fill(0, targetCm3, new Array(sorted.length).fill(0));
+    if(!bestCounts) return {combo:null, total:0, diff:0, insufficient:true};
+    var totalCm3 = sorted.reduce(function(s,b,i){ return s + bestCounts[i]*b.volume; }, 0);
+    var combo = sorted
+      .map(function(b,i){ return {name:b.name, volume:b.volume, qty:bestCounts[i]}; })
+      .filter(function(c){ return c.qty > 0; });
+    return {combo:combo, total:totalCm3, diff:totalCm3 - targetCm3, insufficient:false};
+  }
+
+  // Renders the "closest block match" cell and returns the force-equivalent
+  // margin (kgf) alongside it, so the same solve can drive both the combo
+  // cell and the "Δ vs input" column.
+  function comboAndForce(sizes, target, rho2, rhoW){
+    if(!sizes || sizes.length===0){
+      return { html: '<span class="combo-none">No block sizes defined</span>', marginKg: null, insufficient:false, noSizes:true };
+    }
+    var result = findBestCombination(sizes, target);
+    if(!result || result.insufficient){
+      var html = '<span class="badge badge-danger">No combination reaches required upthrust</span>' +
+        '<div class="combo-total" style="margin-top:4px;">Add larger or more block sizes for this foam.</div>';
+      return { html: html, marginKg: null, insufficient:true, noSizes:false };
+    }
+    var forcePerCm3 = (rhoW - rho2) / 1e6; // kgf per cm³ for this foam in this water
+    var totalKg = result.total * forcePerCm3;
+    var marginKg = result.diff * forcePerCm3; // always >= 0 by construction
+
+    var items = result.combo.map(function(c){
+      return '<li>'+c.qty+'× '+escapeHtml(c.name)+'</li>';
+    }).join("") || '<li>0 blocks needed</li>';
+
+    var html = '<ul class="combo-list">'+items+'</ul>' +
+      '<div class="combo-total">delivers '+fmt(totalKg,2)+' kgf <span class="diff-over">(+'+fmt(marginKg,2)+' kgf margin)</span></div>';
+    return { html: html, marginKg: marginKg, insufficient:false, noSizes:false };
+  }
+
+  /* ============================================================
+     RENDER: SHELL
+  ============================================================ */
+  function render(){
+    var app = document.getElementById("app");
+    app.innerHTML =
+      renderHeader() +
+      '<div id="view">' + (state.tab === "calculator" ? renderCalculator() : renderLibrary()) + '</div>' +
+      renderFooter();
+    bindGlobalEvents();
+    if(state.tab === "calculator") bindCalculatorEvents();
+    else bindLibraryEvents();
+    if(state.tab === "calculator") updateResults();
+  }
+
+  function renderHeader(){
+    return '' +
+    '<div class="console-header">' +
+      '<div class="gauge-wrap">' +
+        '<svg viewBox="0 0 52 52" width="52" height="52">' +
+          '<circle cx="26" cy="26" r="24" fill="none" stroke="#20374A" stroke-width="1.5"/>' +
+          '<circle cx="26" cy="26" r="18" fill="none" stroke="#20374A" stroke-width="1"/>' +
+          (ticks()) +
+          '<g class="gauge-needle"><line x1="26" y1="26" x2="26" y2="9" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/></g>' +
+          '<circle cx="26" cy="26" r="2.5" fill="#E8A33D"/>' +
+        '</svg>' +
+      '</div>' +
+      '<div class="brand">' +
+        '<h1>TRIM</h1>' +
+        '<p>Buoyancy foam density translator</p>' +
+      '</div>' +
+      '<div class="tabs">' +
+        '<button class="tab-btn' + (state.tab==="calculator"?" active":"") + '" data-tab="calculator">Calculator</button>' +
+        '<button class="tab-btn' + (state.tab==="library"?" active":"") + '" data-tab="library">Library</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function ticks(){
+    var out = "";
+    for(var i=0;i<12;i++){
+      var a = (i/12) * Math.PI * 2;
+      var x1 = 26 + Math.sin(a)*20, y1 = 26 - Math.cos(a)*20;
+      var x2 = 26 + Math.sin(a)*23, y2 = 26 - Math.cos(a)*23;
+      out += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#325067" stroke-width="1"/>';
+    }
+    return out;
+  }
+
+  function renderFooter(){
+    return '<div class="footer-note">Your foam library, block sizes and settings are saved automatically in this browser (<code>localStorage</code>), tied to this file. Use Export on the Library tab to back up or move your data to another device.</div>';
+  }
+
+  function bindGlobalEvents(){
+    var tabs = document.querySelectorAll(".tab-btn");
+    for(var i=0;i<tabs.length;i++){
+      tabs[i].addEventListener("click", function(){
+        state.tab = this.getAttribute("data-tab");
+        render();
+      });
+    }
+  }
+
+  /* ============================================================
+     CALCULATOR VIEW
+  ============================================================ */
+  function renderCalculator(){
+    var waterCustomVisible = state.calc.waterType === "custom";
+    var inputFoam = getFoam(state.calc.selectedFoamId);
+    var foamOptions = state.foams.map(function(f){
+      return '<option value="'+f.id+'"'+(f.id===state.calc.selectedFoamId?" selected":"")+'>'+escapeHtml(f.name)+' — '+fmt(f.density)+' kg/m³</option>';
+    }).join("");
+
+    return '' +
+    '<div class="panel">' +
+      '<div class="panel-title">Input foam</div>' +
+      '<div class="field-grid">' +
+        '<div class="field">' +
+          '<label for="in-foam">Foam type</label>' +
+          '<select id="in-foam">' + (state.foams.length ? foamOptions : '<option>No foams in library</option>') + '</select>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label for="in-water">Water type</label>' +
+          '<select id="in-water">' +
+            '<option value="seawater"'+(state.calc.waterType==="seawater"?" selected":"")+'>Seawater (1025 kg/m³)</option>' +
+            '<option value="freshwater"'+(state.calc.waterType==="freshwater"?" selected":"")+'>Freshwater (1000 kg/m³)</option>' +
+            '<option value="custom"'+(state.calc.waterType==="custom"?" selected":"")+'>Custom…</option>' +
+          '</select>' +
+        '</div>' +
+        (waterCustomVisible ? '<div class="field">' +
+          '<label for="in-water-custom">Custom water density (kg/m³)</label>' +
+          '<input type="number" id="in-water-custom" min="0" step="any" value="'+state.calc.customWaterDensity+'">' +
+        '</div>' : '') +
+        '<div class="field">' +
+          '<label for="in-depth">Intended use depth — optional (m)</label>' +
+          '<input type="number" id="in-depth" min="0" step="any" placeholder="e.g. 2000" value="'+(state.calc.useDepth===""?"":state.calc.useDepth)+'">' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="margin-top:16px;">' +
+        '<label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:8px;">Input volume</label>' +
+        '<div class="mode-toggle">' +
+          '<button class="mode-btn'+(state.calc.inputMode==="custom"?" active":"")+'" data-mode="custom">Custom volume</button>' +
+          '<button class="mode-btn'+(state.calc.inputMode==="blocks"?" active":"")+'" data-mode="blocks">Build from blocks</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div id="volume-input-area" style="margin-top:12px;">' + renderVolumeInputArea(inputFoam) + '</div>' +
+
+      '<div id="readout"></div>' +
+    '</div>' +
+    '<div class="panel">' +
+      '<div class="panel-title">Equivalent volumes</div>' +
+      '<div class="panel-sub">Block combinations always meet or exceed the required upthrust — never under.</div>' +
+      '<div id="results"></div>' +
+    '</div>';
+  }
+
+  function renderVolumeInputArea(inputFoam){
+    if(state.calc.inputMode === "custom"){
+      return '<div class="field" style="max-width:260px;">' +
+        '<label for="in-volume">Volume (cm³)</label>' +
+        '<input type="number" id="in-volume" min="0" step="any" value="'+state.calc.customVolume+'">' +
+      '</div>';
+    }
+
+    if(!inputFoam) return '<div class="empty-note">Select a foam first.</div>';
+    var globalSizes = effectiveSizes(inputFoam).filter(function(s){return s.scope==="global";});
+    var foamSizes = effectiveSizes(inputFoam).filter(function(s){return s.scope==="foam";});
+
+    if(globalSizes.length===0 && foamSizes.length===0){
+      return '<div class="empty-note">No block sizes defined yet for this foam. Add standard or foam-specific sizes in the Library tab.</div>';
+    }
+
+    var html = '<div class="block-picker">';
+    if(globalSizes.length){
+      html += '<div class="block-group-label">Standard sizes</div>';
+      html += globalSizes.map(function(s){ return blockRow(s); }).join("");
+    }
+    if(foamSizes.length){
+      html += '<div class="block-group-label">'+escapeHtml(inputFoam.name)+'-specific sizes</div>';
+      html += foamSizes.map(function(s){ return blockRow(s); }).join("");
+    }
+    var total = globalSizes.concat(foamSizes).reduce(function(sum,s){
+      var q = parseFloat(state.calc.blockQuantities[s.id]) || 0;
+      return sum + q*s.volume;
+    },0);
+    html += '<div class="block-total">Total input volume: '+fmt(total,0)+' cm³</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function blockRow(s){
+    var qty = state.calc.blockQuantities[s.id] || 0;
+    return '<div class="block-row">' +
+      '<span class="bname">'+escapeHtml(s.name)+' <span style="color:var(--text-faint);">('+s.l+'×'+s.w+'×'+s.h+' mm)</span></span>' +
+      '<span class="bvol">'+fmt(s.volume,0)+' cm³ ea.</span>' +
+      '<input type="number" min="0" step="1" class="block-qty" data-size="'+s.id+'" value="'+qty+'">' +
+    '</div>';
+  }
+
+  function currentInputVolume(inputFoam){
+    if(state.calc.inputMode === "custom"){
+      var v = parseFloat(state.calc.customVolume);
+      return isNaN(v) ? 0 : v;
+    }
+    return effectiveSizes(inputFoam).reduce(function(sum,s){
+      var q = parseFloat(state.calc.blockQuantities[s.id]) || 0;
+      return sum + q*s.volume;
+    },0);
+  }
+
+  function bindCalculatorEvents(){
+    var foamSel = document.getElementById("in-foam");
+    if(foamSel) foamSel.addEventListener("change", function(){
+      state.calc.selectedFoamId = this.value;
+      state.calc.blockQuantities = {};
+      saveState(); render();
+    });
+    var waterSel = document.getElementById("in-water");
+    if(waterSel) waterSel.addEventListener("change", function(){
+      state.calc.waterType = this.value; saveState(); render();
+    });
+    var waterCustom = document.getElementById("in-water-custom");
+    if(waterCustom) waterCustom.addEventListener("input", function(){
+      state.calc.customWaterDensity = this.value; saveState(); updateResults();
+    });
+    var depthInput = document.getElementById("in-depth");
+    if(depthInput) depthInput.addEventListener("input", function(){
+      state.calc.useDepth = this.value; saveState(); updateResults();
+    });
+
+    var modeBtns = document.querySelectorAll(".mode-btn");
+    for(var i=0;i<modeBtns.length;i++){
+      modeBtns[i].addEventListener("click", function(){
+        state.calc.inputMode = this.getAttribute("data-mode");
+        saveState(); render();
+      });
+    }
+
+    var volInput = document.getElementById("in-volume");
+    if(volInput) volInput.addEventListener("input", function(){
+      state.calc.customVolume = this.value; saveState(); updateResults();
+    });
+
+    bindVolumeAreaEvents();
+  }
+
+  function bindVolumeAreaEvents(){
+    var qtyInputs = document.querySelectorAll(".block-qty");
+    for(var j=0;j<qtyInputs.length;j++){
+      qtyInputs[j].addEventListener("input", function(){
+        var sizeId = this.getAttribute("data-size");
+        state.calc.blockQuantities[sizeId] = this.value;
+        saveState();
+        var inputFoam = getFoam(state.calc.selectedFoamId);
+        var area = document.getElementById("volume-input-area");
+        if(area) area.innerHTML = renderVolumeInputArea(inputFoam);
+        bindVolumeAreaEvents();
+        updateResults();
+      });
+    }
+  }
+
+  /* ------------------------------------------------------------------
+     COLUMN DEFINITIONS
+     Fixed columns (always in this order after the always-visible Foam
+     name column). Custom property columns are appended dynamically.
+  ------------------------------------------------------------------ */
+  var FIXED_COLS = [
+    { key:'density', label:'Density'              },
+    { key:'volume',  label:'Equiv. volume'         },
+    { key:'margin',  label:'Upthrust margin'       },
+    { key:'depth',   label:'Depth rating'          },
+    { key:'blocks',  label:'Block match'           },
+    { key:'status',  label:'Status'                }
+  ];
+
+  function colVisible(key){
+    return state.calc.hiddenCols.indexOf(key) < 0;
+  }
+  function foamVisible(id){
+    return state.calc.hiddenFoamIds.indexOf(id) < 0;
+  }
+
+  function updateResults(){
+    var readoutEl = document.getElementById("readout");
+    var resultsEl = document.getElementById("results");
+    if(!resultsEl) return;
+
+    var rhoW = waterDensity();
+    var inputFoam = getFoam(state.calc.selectedFoamId);
+
+    if(!inputFoam){
+      resultsEl.innerHTML = '<div class="empty-note">Add a foam type in the Library tab to begin.</div>';
+      if(readoutEl) readoutEl.innerHTML = "";
+      return;
+    }
+
+    var V1 = currentInputVolume(inputFoam);
+    var rho1 = parseFloat(inputFoam.density);
+    var inputValid = rhoW > rho1;
+    var netKg = (rhoW - rho1) * V1 / 1e6;
+    var netN  = netKg * 9.81;
+
+    if(readoutEl){
+      readoutEl.innerHTML =
+      '<div class="readout">' +
+        '<div class="readout-item"><div class="val">'+ fmt(V1,0) +' cm³</div><div class="lbl">input volume</div></div>' +
+        '<div class="readout-item"><div class="val">'+ (inputValid ? fmt(netKg,2) : "—") +' kg</div><div class="lbl">net upthrust (force-equivalent)</div></div>' +
+        '<div class="readout-item"><div class="val">'+ (inputValid ? fmt(netN,1) : "—") +' N</div><div class="lbl">net upthrust</div></div>' +
+        '<div class="readout-item"><div class="val" style="color:'+(inputValid?"#5FBF8F":"#E0654A")+'">'+ (inputValid ? "POSITIVE" : "NEGATIVE") +'</div><div class="lbl">'+ (inputValid ? "buoyant in selected water" : "foam denser than water — will sink") +'</div></div>' +
+      '</div>';
+    }
+
+    // All foams that are not the input foam
+    var candidates = state.foams.filter(function(f){ return f.id !== inputFoam.id; });
+
+    // ---- Foam filter chip bar ----------------------------------------
+    var allOn = candidates.every(function(f){ return foamVisible(f.id); });
+    var foamChips = '<span class="fchip all-chip'+(allOn?" on":"")+'" data-foam-all="1">All</span>';
+    foamChips += candidates.map(function(f){
+      var on = foamVisible(f.id);
+      return '<span class="fchip'+(on?" on":"")+'" data-foam-chip="'+f.id+'">' + escapeHtml(f.name) + '</span>';
+    }).join("");
+
+    // All col keys (fixed + properties)
+    var allColDefs = FIXED_COLS.concat(state.properties.map(function(p){
+      return { key:'prop_'+p.id, label:escapeHtml(p.name) };
+    }));
+    var colChips = allColDefs.map(function(c){
+      var on = colVisible(c.key);
+      return '<span class="cchip'+(on?" on":"")+'" data-col-chip="'+c.key+'">'+c.label+'</span>';
+    }).join("");
+
+    var colBtnCls = 'col-toggle-btn'+(state.ui.colsOpen?" open":"");
+    var controls =
+      '<div class="results-controls">' +
+        '<div class="filter-section">' +
+          '<div class="filter-label">Output foams</div>' +
+          '<div class="chip-row">'+foamChips+'</div>' +
+        '</div>' +
+        '<button class="'+colBtnCls+'" id="btn-cols">Columns '+(state.ui.colsOpen?'▴':'▾')+'</button>' +
+      '</div>' +
+      (state.ui.colsOpen ? '<div class="col-panel">'+colChips+'</div>' : '');
+
+    // ---- Early-exit states -------------------------------------------
+    if(!inputValid){
+      resultsEl.innerHTML = controls +
+        '<div class="empty-note">Input foam density ('+fmt(rho1)+' kg/m³) meets or exceeds the water density ('+fmt(rhoW)+' kg/m³), so it produces no upthrust here — nothing to translate to.</div>';
+      bindResultsEvents();
+      return;
+    }
+    if(candidates.length === 0){
+      resultsEl.innerHTML = controls +
+        '<div class="empty-note">Add more foams to the library to see equivalent volumes.</div>';
+      bindResultsEvents();
+      return;
+    }
+
+    // ---- Apply foam filter -------------------------------------------
+    var others = candidates.filter(function(f){ return foamVisible(f.id); });
+    if(others.length === 0){
+      resultsEl.innerHTML = controls +
+        '<div class="empty-note">All output foams are hidden — toggle some foams on above.</div>';
+      bindResultsEvents();
+      return;
+    }
+
+    var useDepth = parseFloat(state.calc.useDepth);
+    var hasDepth = !isNaN(useDepth) && state.calc.useDepth !== "";
+    var maxDensityScale = Math.max(rhoW, rho1, Math.max.apply(null, others.map(function(f){ return parseFloat(f.density)||0; }))) * 1.08;
+
+    // ---- Build table -------------------------------------------------
+    // Determine which columns are visible
+    var showDensity = colVisible('density');
+    var showVolume  = colVisible('volume');
+    var showMargin  = colVisible('margin');
+    var showDepth   = colVisible('depth');
+    var showBlocks  = colVisible('blocks');
+    var showStatus  = colVisible('status');
+    var visProps    = state.properties.filter(function(p){ return colVisible('prop_'+p.id); });
+
+    var thead = '<tr>' +
+      '<th>Foam</th>' +
+      (showDensity ? '<th>Density</th>' : '') +
+      (showVolume  ? '<th>Equiv. volume</th>' : '') +
+      (showMargin  ? '<th>Upthrust margin</th>' : '') +
+      (showDepth   ? '<th>Depth rating</th>' : '') +
+      visProps.map(function(p){ return '<th>'+escapeHtml(p.name)+'</th>'; }).join('') +
+      (showBlocks  ? '<th>Block match (≥ required)</th>' : '') +
+      (showStatus  ? '<th>Status</th>' : '') +
+    '</tr>';
+
+    var rows = others.map(function(f){
+      var rho2   = parseFloat(f.density);
+      var valid  = rhoW > rho2;
+      var V2     = valid ? V1 * (rhoW - rho1) / (rhoW - rho2) : null;
+
+      var depthStatus = "";
+      if(!valid){
+        depthStatus = '<span class="badge badge-danger">Too dense</span>';
+      } else if(hasDepth && f.depthRating !== "" && !isNaN(parseFloat(f.depthRating))){
+        depthStatus = useDepth > parseFloat(f.depthRating)
+          ? '<span class="badge badge-danger">Exceeds rating</span>'
+          : '<span class="badge badge-ok">Within rating</span>';
+      } else if(valid){
+        depthStatus = '<span class="badge badge-ok">Valid</span>';
+      }
+
+      var barPct   = Math.min(100, (rho2/maxDensityScale)*100);
+      var waterPct = Math.min(100, (rhoW/maxDensityScale)*100);
+
+      var combo = (valid && (showBlocks || showMargin))
+        ? comboAndForce(effectiveSizes(f), V2, rho2, rhoW)
+        : { html:'<span class="combo-none">—</span>', marginKg:null, insufficient:false, noSizes:true };
+
+      var deltaCell;
+      if(!valid)                { deltaCell = '—'; }
+      else if(combo.noSizes)    { deltaCell = '<span class="combo-none">—</span>'; }
+      else if(combo.insufficient){ deltaCell = '<span class="badge badge-danger">Insufficient</span>'; }
+      else                      { deltaCell = '<span style="color:var(--amber);">+'+fmt(combo.marginKg,2)+' kgf</span>'; }
+
+      return '<tr>' +
+        '<td class="foam-name">'+escapeHtml(f.name)+'</td>' +
+        (showDensity ?
+          '<td class="mono">'+fmt(rho2)+' kg/m³' +
+            '<div class="density-bar-wrap"><div class="density-bar-track">' +
+              '<div class="density-bar-fill'+(valid?"":" danger")+'" style="width:'+barPct+'%"></div>' +
+              '<div class="waterline" style="left:'+waterPct+'%"></div>' +
+            '</div></div></td>' : '') +
+        (showVolume  ? '<td class="mono">'+(valid ? fmt(V2,0)+' cm³' : '—')+'</td>' : '') +
+        (showMargin  ? '<td class="mono">'+deltaCell+'</td>' : '') +
+        (showDepth   ? '<td class="mono">'+(f.depthRating===""||f.depthRating===undefined ? '—' : fmt(f.depthRating)+' m')+'</td>' : '') +
+        visProps.map(function(p){
+          var val = (f.custom && f.custom[p.id] !== undefined) ? f.custom[p.id] : "";
+          return '<td class="mono">'+(val===""?'—':escapeHtml(String(val)))+'</td>';
+        }).join('') +
+        (showBlocks  ? '<td>'+combo.html+'</td>' : '') +
+        (showStatus  ? '<td>'+depthStatus+'</td>' : '') +
+      '</tr>';
+    }).join("");
+
+    resultsEl.innerHTML = controls +
+      '<div class="table-wrap"><table>' +
+        '<thead>'+thead+'</thead>' +
+        '<tbody>'+rows+'</tbody>' +
+      '</table></div>';
+
+    bindResultsEvents();
+  }
+
+  function bindResultsEvents(){
+    // Foam filter chips
+    var allChip = document.querySelector('[data-foam-all]');
+    if(allChip) allChip.addEventListener("click", function(){
+      state.calc.hiddenFoamIds = [];
+      saveState(); updateResults();
+    });
+    var foamChips = document.querySelectorAll('[data-foam-chip]');
+    for(var i=0;i<foamChips.length;i++){
+      foamChips[i].addEventListener("click", function(){
+        var id = this.getAttribute("data-foam-chip");
+        var hidden = state.calc.hiddenFoamIds;
+        var idx = hidden.indexOf(id);
+        if(idx >= 0) hidden.splice(idx,1); else hidden.push(id);
+        saveState(); updateResults();
+      });
+    }
+    // Columns button
+    var colBtn = document.getElementById("btn-cols");
+    if(colBtn) colBtn.addEventListener("click", function(){
+      state.ui.colsOpen = !state.ui.colsOpen;
+      updateResults();
+    });
+    // Column chips
+    var colChips = document.querySelectorAll('[data-col-chip]');
+    for(var j=0;j<colChips.length;j++){
+      colChips[j].addEventListener("click", function(){
+        var key = this.getAttribute("data-col-chip");
+        var hidden = state.calc.hiddenCols;
+        var idx = hidden.indexOf(key);
+        if(idx >= 0) hidden.splice(idx,1); else hidden.push(key);
+        saveState(); updateResults();
+      });
+    }
+  }
+
+  /* ============================================================
+     LIBRARY VIEW
+  ============================================================ */
+  function renderLibrary(){
+    var propHeaders = state.properties.map(function(p){
+      return '<th>'+escapeHtml(p.name)+'<span class="col-x" data-remove-prop="'+p.id+'" title="Remove property">✕</span></th>';
+    }).join("");
+
+    var rows = state.foams.map(function(f){
+      var propCells = state.properties.map(function(p){
+        var val = (f.custom && f.custom[p.id] !== undefined) ? f.custom[p.id] : "";
+        return '<td><input type="'+(p.type==="number"?"number":"text")+'" data-foam="'+f.id+'" data-prop="'+p.id+'" value="'+escapeAttr(val)+'"></td>';
+      }).join("");
+
+      return '<tr>' +
+        '<td><input type="text" data-foam="'+f.id+'" data-field="name" value="'+escapeAttr(f.name)+'"></td>' +
+        '<td><input type="number" step="any" data-foam="'+f.id+'" data-field="density" value="'+escapeAttr(f.density)+'"></td>' +
+        '<td><input type="number" step="any" data-foam="'+f.id+'" data-field="depthRating" value="'+escapeAttr(f.depthRating)+'"></td>' +
+        propCells +
+        '<td><button class="row-del" data-del-foam="'+f.id+'" title="Remove foam">✕</button></td>' +
+      '</tr>';
+    }).join("");
+
+    var sizeFoam = getFoam(state.ui.sizeFoamId) || state.foams[0] || null;
+    var foamSizeOptions = state.foams.map(function(f){
+      return '<option value="'+f.id+'"'+(sizeFoam && f.id===sizeFoam.id?" selected":"")+'>'+escapeHtml(f.name)+'</option>';
+    }).join("");
+    var foamSizeRows = (sizeFoam ? (sizeFoam.sizes||[]) : []).map(function(s){
+      return sizeRow(s, sizeFoam.id);
+    }).join("");
+    var globalSizeRows = state.globalSizes.map(function(s){
+      return sizeRow(s, null);
+    }).join("");
+
+    return '' +
+    '<div class="panel">' +
+      '<div class="panel-title">Foam library</div>' +
+      '<div class="lib-table-wrap"><table class="lib-table">' +
+        '<thead><tr><th>Name</th><th>Density (kg/m³)</th><th>Depth rating (m)</th>'+propHeaders+'<th></th></tr></thead>' +
+        '<tbody>'+ (rows || '') +'</tbody>' +
+      '</table></div>' +
+      (state.foams.length===0 ? '<div class="empty-note">No foams yet — add one below.</div>' : '') +
+      '<div class="btn-row">' +
+        '<button class="btn btn-primary" id="btn-add-foam">+ Add foam</button>' +
+        '<button class="btn btn-danger" id="btn-reset-foams">Reset to defaults</button>' +
+      '</div>' +
+      '<div class="prop-form">' +
+        '<div class="field"><label>New property name</label><input type="text" id="new-prop-name" placeholder="e.g. Compressive strength"></div>' +
+        '<div class="field" style="max-width:140px;"><label>Type</label>' +
+          '<select id="new-prop-type"><option value="text">Text</option><option value="number">Number</option></select>' +
+        '</div>' +
+        '<button class="btn" id="btn-add-prop">+ Add property</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="panel">' +
+      '<div class="panel-title">Standard block sizes</div>' +
+      '<div class="panel-sub">Apply to every foam type in the library.</div>' +
+      '<div class="lib-table-wrap"><table class="lib-table">' +
+        '<thead><tr><th>Name</th><th>L (mm)</th><th>W (mm)</th><th>H (mm)</th><th>Volume</th><th></th></tr></thead>' +
+        '<tbody>'+ (globalSizeRows || '') +'</tbody>' +
+      '</table></div>' +
+      (state.globalSizes.length===0 ? '<div class="empty-note">No standard sizes yet — add one below.</div>' : '') +
+      sizeAddForm("global", null) +
+    '</div>' +
+
+    '<div class="panel">' +
+      '<div class="panel-title">Foam-specific block sizes</div>' +
+      '<div class="panel-sub">Only available when that foam type is selected.</div>' +
+      '<div class="field" style="max-width:280px;margin-bottom:12px;">' +
+        '<label for="size-foam-select">Foam type</label>' +
+        '<select id="size-foam-select">' + (state.foams.length ? foamSizeOptions : '<option>No foams</option>') + '</select>' +
+      '</div>' +
+      '<div class="lib-table-wrap"><table class="lib-table">' +
+        '<thead><tr><th>Name</th><th>L (mm)</th><th>W (mm)</th><th>H (mm)</th><th>Volume</th><th></th></tr></thead>' +
+        '<tbody>'+ (foamSizeRows || '') +'</tbody>' +
+      '</table></div>' +
+      (sizeFoam && (sizeFoam.sizes||[]).length===0 ? '<div class="empty-note">No sizes specific to '+escapeHtml(sizeFoam.name)+' yet.</div>' : '') +
+      (sizeFoam ? sizeAddForm("foam", sizeFoam.id) : '<div class="empty-note">Add a foam first.</div>') +
+    '</div>' +
+
+    '<div class="panel">' +
+      '<div class="panel-title">Backup</div>' +
+      '<p class="hint" style="margin:0 0 10px;">Save your library to a file, or load one from another device.</p>' +
+      '<div class="btn-row" style="margin-top:0;">' +
+        '<button class="btn" id="btn-export">Export JSON</button>' +
+        '<button class="btn" id="btn-import">Import JSON</button>' +
+        '<input type="file" id="file-import" accept="application/json">' +
+      '</div>' +
+    '</div>';
+  }
+
+  function sizeRow(s, foamId){
+    var vol = sizeVolume(s);
+    var scopeAttr = foamId ? ' data-foam="'+foamId+'"' : '';
+    return '<tr>' +
+      '<td><input type="text" class="size-field" data-size="'+s.id+'" data-sfield="name"'+scopeAttr+' value="'+escapeAttr(s.name)+'"></td>' +
+      '<td><input type="number" step="any" class="size-field dim-input" data-size="'+s.id+'" data-sfield="l"'+scopeAttr+' value="'+escapeAttr(s.l)+'"></td>' +
+      '<td><input type="number" step="any" class="size-field dim-input" data-size="'+s.id+'" data-sfield="w"'+scopeAttr+' value="'+escapeAttr(s.w)+'"></td>' +
+      '<td><input type="number" step="any" class="size-field dim-input" data-size="'+s.id+'" data-sfield="h"'+scopeAttr+' value="'+escapeAttr(s.h)+'"></td>' +
+      '<td class="vol-cell">'+fmt(vol,0)+' cm³</td>' +
+      '<td><button class="row-del" data-del-size="'+s.id+'"'+scopeAttr+' title="Remove size">✕</button></td>' +
+    '</tr>';
+  }
+
+  function sizeAddForm(kind, foamId){
+    var prefix = kind === "global" ? "gsize" : "fsize";
+    return '<div class="prop-form">' +
+      '<div class="field" style="flex:1 1 160px;"><label>Name</label><input type="text" id="new-'+prefix+'-name" placeholder="e.g. Full block"></div>' +
+      '<div class="field" style="flex:0 1 80px;"><label>L (mm)</label><input type="number" step="any" id="new-'+prefix+'-l"></div>' +
+      '<div class="field" style="flex:0 1 80px;"><label>W (mm)</label><input type="number" step="any" id="new-'+prefix+'-w"></div>' +
+      '<div class="field" style="flex:0 1 80px;"><label>H (mm)</label><input type="number" step="any" id="new-'+prefix+'-h"></div>' +
+      '<button class="btn" data-add-size="'+kind+'"'+(foamId?' data-foam="'+foamId+'"':'')+'>+ Add size</button>' +
+    '</div>';
+  }
+
+  function bindLibraryEvents(){
+    // ---- foam table inline edits ----
+    var inputs = document.querySelectorAll(".lib-table input[data-foam][data-field], .lib-table input[data-foam][data-prop]");
+    for(var i=0;i<inputs.length;i++){
+      inputs[i].addEventListener("input", function(){
+        var foam = getFoam(this.getAttribute("data-foam"));
+        if(!foam) return;
+        var field = this.getAttribute("data-field");
+        var prop = this.getAttribute("data-prop");
+        if(field){
+          foam[field] = this.value;
+        } else if(prop){
+          if(!foam.custom) foam.custom = {};
+          foam.custom[prop] = this.value;
+        }
+        saveState();
+      });
+    }
+
+    var delBtns = document.querySelectorAll("[data-del-foam]");
+    for(var j=0;j<delBtns.length;j++){
+      delBtns[j].addEventListener("click", function(){
+        var id = this.getAttribute("data-del-foam");
+        var foam = getFoam(id);
+        if(foam && !confirm('Remove "'+foam.name+'" from the library?')) return;
+        state.foams = state.foams.filter(function(f){ return f.id !== id; });
+        if(state.calc.selectedFoamId === id){
+          state.calc.selectedFoamId = state.foams.length ? state.foams[0].id : null;
+        }
+        if(state.ui.sizeFoamId === id){
+          state.ui.sizeFoamId = state.foams.length ? state.foams[0].id : null;
+        }
+        saveState(); render();
+      });
+    }
+
+    var removePropBtns = document.querySelectorAll("[data-remove-prop]");
+    for(var k=0;k<removePropBtns.length;k++){
+      removePropBtns[k].addEventListener("click", function(){
+        var id = this.getAttribute("data-remove-prop");
+        var prop = state.properties.filter(function(p){return p.id===id;})[0];
+        if(prop && !confirm('Remove property "'+prop.name+'" from all foams?')) return;
+        state.properties = state.properties.filter(function(p){ return p.id !== id; });
+        state.foams.forEach(function(f){ if(f.custom) delete f.custom[id]; });
+        saveState(); render();
+      });
+    }
+
+    var addFoamBtn = document.getElementById("btn-add-foam");
+    if(addFoamBtn) addFoamBtn.addEventListener("click", function(){
+      var custom = {};
+      state.properties.forEach(function(p){ custom[p.id] = ""; });
+      state.foams.push({id:uid("f"), name:"New foam", density:"", depthRating:"", custom:custom, sizes:[]});
+      saveState(); render();
+    });
+
+    var resetBtn = document.getElementById("btn-reset-foams");
+    if(resetBtn) resetBtn.addEventListener("click", function(){
+      if(!confirm("Reset the library to the default foams and standard block sizes? This removes all your current foams, custom properties and block sizes.")) return;
+      state.foams = defaultFoams();
+      state.properties = defaultProperties();
+      state.globalSizes = defaultGlobalSizes();
+      state.calc.selectedFoamId = state.foams.length ? state.foams[0].id : null;
+      state.calc.blockQuantities = {};
+      state.ui.sizeFoamId = state.foams.length ? state.foams[0].id : null;
+      saveState(); render();
+    });
+
+    var addPropBtn = document.getElementById("btn-add-prop");
+    if(addPropBtn) addPropBtn.addEventListener("click", function(){
+      var nameEl = document.getElementById("new-prop-name");
+      var typeEl = document.getElementById("new-prop-type");
+      var name = nameEl.value.trim();
+      if(!name){ nameEl.focus(); return; }
+      var id = uid("p");
+      state.properties.push({id:id, name:name, type:typeEl.value});
+      state.foams.forEach(function(f){
+        if(!f.custom) f.custom = {};
+        f.custom[id] = "";
+      });
+      saveState(); render();
+    });
+
+    // ---- block size editing (global + foam-specific) ----
+    var sizeFields = document.querySelectorAll(".size-field");
+    for(var m=0;m<sizeFields.length;m++){
+      sizeFields[m].addEventListener("input", function(){
+        var sizeId = this.getAttribute("data-size");
+        var sfield = this.getAttribute("data-sfield");
+        var foamId = this.getAttribute("data-foam");
+        var target = foamId ? findFoamSize(foamId, sizeId) : findGlobalSize(sizeId);
+        if(!target) return;
+        target[sfield] = this.value;
+        saveState();
+        // live-update the volume cell in this row without full re-render
+        var row = this.closest("tr");
+        if(row){
+          var volCell = row.querySelector(".vol-cell");
+          if(volCell) volCell.textContent = fmt(sizeVolume(target),0) + " cm³";
+        }
+      });
+    }
+
+    var delSizeBtns = document.querySelectorAll("[data-del-size]");
+    for(var n=0;n<delSizeBtns.length;n++){
+      delSizeBtns[n].addEventListener("click", function(){
+        var sizeId = this.getAttribute("data-del-size");
+        var foamId = this.getAttribute("data-foam");
+        if(foamId){
+          var foam = getFoam(foamId);
+          if(foam) foam.sizes = (foam.sizes||[]).filter(function(s){ return s.id !== sizeId; });
+        } else {
+          state.globalSizes = state.globalSizes.filter(function(s){ return s.id !== sizeId; });
+        }
+        delete state.calc.blockQuantities[sizeId];
+        saveState(); render();
+      });
+    }
+
+    var sizeFoamSelect = document.getElementById("size-foam-select");
+    if(sizeFoamSelect) sizeFoamSelect.addEventListener("change", function(){
+      state.ui.sizeFoamId = this.value;
+      render();
+    });
+
+    var addSizeBtns = document.querySelectorAll("[data-add-size]");
+    for(var p=0;p<addSizeBtns.length;p++){
+      addSizeBtns[p].addEventListener("click", function(){
+        var kind = this.getAttribute("data-add-size");
+        var prefix = kind === "global" ? "gsize" : "fsize";
+        var nameEl = document.getElementById("new-"+prefix+"-name");
+        var lEl = document.getElementById("new-"+prefix+"-l");
+        var wEl = document.getElementById("new-"+prefix+"-w");
+        var hEl = document.getElementById("new-"+prefix+"-h");
+        var name = nameEl.value.trim();
+        if(!name){ nameEl.focus(); return; }
+        var newSize = {id:uid("s"), name:name, l:lEl.value||0, w:wEl.value||0, h:hEl.value||0};
+        if(kind === "global"){
+          state.globalSizes.push(newSize);
+        } else {
+          var foamId = this.getAttribute("data-foam");
+          var foam = getFoam(foamId);
+          if(foam){
+            if(!foam.sizes) foam.sizes = [];
+            foam.sizes.push(newSize);
+          }
+        }
+        saveState(); render();
+      });
+    }
+
+    var exportBtn = document.getElementById("btn-export");
+    if(exportBtn) exportBtn.addEventListener("click", function(){
+      var data = JSON.stringify({foams:state.foams, properties:state.properties, globalSizes:state.globalSizes}, null, 2);
+      var blob = new Blob([data], {type:"application/json"});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "trim-foam-library.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    var importBtn = document.getElementById("btn-import");
+    var fileInput = document.getElementById("file-import");
+    if(importBtn && fileInput){
+      importBtn.addEventListener("click", function(){ fileInput.click(); });
+      fileInput.addEventListener("change", function(){
+        var file = this.files[0];
+        if(!file) return;
+        var reader = new FileReader();
+        reader.onload = function(e){
+          try{
+            var parsed = JSON.parse(e.target.result);
+            if(!parsed || !Array.isArray(parsed.foams)) throw new Error("Missing foams array");
+            if(!confirm("Import will replace your current library. Continue?")) return;
+            state.foams = parsed.foams;
+            state.foams.forEach(function(f){ if(!f.sizes) f.sizes=[]; if(!f.custom) f.custom={}; });
+            state.properties = parsed.properties || [];
+            state.globalSizes = parsed.globalSizes || [];
+            state.calc.selectedFoamId = state.foams.length ? state.foams[0].id : null;
+            state.calc.blockQuantities = {};
+            state.ui.sizeFoamId = state.foams.length ? state.foams[0].id : null;
+            saveState(); render();
+          }catch(err){
+            alert("Could not import this file: " + err.message);
+          }
+          fileInput.value = "";
+        };
+        reader.readAsText(file);
+      });
+    }
+  }
+
+  function findGlobalSize(id){
+    for(var i=0;i<state.globalSizes.length;i++) if(state.globalSizes[i].id===id) return state.globalSizes[i];
+    return null;
+  }
+  function findFoamSize(foamId, sizeId){
+    var foam = getFoam(foamId);
+    if(!foam || !foam.sizes) return null;
+    for(var i=0;i<foam.sizes.length;i++) if(foam.sizes[i].id===sizeId) return foam.sizes[i];
+    return null;
+  }
+
+  /* ============================================================
+     UTIL
+  ============================================================ */
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function escapeAttr(v){
+    return escapeHtml(v===undefined||v===null?"":v);
+  }
+
+  function showLoadingShell(){
+    var app = document.getElementById("app");
+    if(app) app.innerHTML =
+      '<div class="panel" style="text-align:center;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;letter-spacing:0.08em;padding:40px 16px;">LOADING TRIM…</div>';
+  }
+
+  function init(){
+    showLoadingShell();
+    loadDefaults().then(function(){
+      state = loadState();
+      state.tab = "calculator";
+      state.ui = { sizeFoamId: (state.foams[0] && state.foams[0].id) || null, colsOpen: false };
+      render();
+      if(defaultsLoadFailed){
+        console.warn("Using built-in fallback defaults because defaults.json could not be loaded.");
+      }
+    });
+  }
+
+  init();
+})();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("service-worker.js").catch(function(err){
+      console.warn("Service worker registration failed:", err);
+    });
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+{
+  "foams": [
+    {
+      "id": "f1",
+      "name": "R-3312",
+      "density": 192,
+      "depthRating": 91,
+      "custom": {
+        "pmrrumz0xpp0vo": "BlueRobotics"
+      },
+      "sizes": []
+    },
+    {
+      "id": "f2",
+      "name": "R-3318",
+      "density": 288,
+      "depthRating": 300,
+      "custom": {
+        "pmrrumz0xpp0vo": "BlueRobotics"
+      },
+      "sizes": []
+    },
+    {
+      "id": "f3",
+      "name": "H130",
+      "density": 130,
+      "depthRating": 70,
+      "custom": {
+        "pmrrumz0xpp0vo": "Diab"
+      },
+      "sizes": []
+    },
+    {
+      "id": "f4",
+      "name": "H160",
+      "density": 160,
+      "depthRating": 100,
+      "custom": {
+        "pmrrumz0xpp0vo": "Diab"
+      },
+      "sizes": []
+    },
+    {
+      "id": "f5",
+      "name": "HCP30",
+      "density": 200,
+      "depthRating": 190,
+      "custom": {
+        "pmrrumz0xpp0vo": "Diab"
+      },
+      "sizes": []
+    },
+    {
+      "id": "f6",
+      "name": "HCP50",
+      "density": 250,
+      "depthRating": 300,
+      "custom": {
+        "pmrrumz0xpp0vo": "Diab"
+      },
+      "sizes": []
+    },
+    {
+      "id": "f7",
+      "name": "EVA Foam",
+      "density": 100,
+      "depthRating": 40,
+      "custom": {
+        "pmrrumz0xpp0vo": ""
+      },
+      "sizes": []
+    }
+  ],
+  "properties": [
+    {
+      "id": "pmrrumz0xpp0vo",
+      "name": "Supplier",
+      "type": "text"
+    }
+  ],
+  "globalSizes": [
+    {
+      "id": "g1",
+      "name": "Skid block",
+      "l": 203.2,
+      "w": 83.725,
+      "h": 25.4
+    },
+    {
+      "id": "g2",
+      "name": "Square block",
+      "l": 101.6,
+      "w": 101.6,
+      "h": 25.4
+    },
+    {
+      "id": "g3",
+      "name": "Small block",
+      "l": 101.6,
+      "w": 50.8,
+      "h": 25.4
+    }
+  ]
+}
