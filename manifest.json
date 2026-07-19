@@ -3,7 +3,7 @@
   "short_name": "TRIM",
   "description": "Translate required volumes between buoyancy foam densities in seawater or freshwater, and match them to physical block sizes.",
   "start_url": "./index.html",
-  "id": "/Trim/index.html",
+  "id": "/TRIM/index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
